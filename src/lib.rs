@@ -13,3 +13,5 @@ mod hash;
 mod index;
 mod misc;
 mod threading;
+
+pub use agent::Agent;

@@ -51,7 +51,7 @@ pub fn write_to_db(db: &sled::Db, rev_table: RevTable, channel: Sender<MessageTo
 }
 
 // it initializes DB on disk
-fn generate_rev_table_from_file_index(
+pub fn generate_rev_table_from_file_index(
     file_index: &FileIndex,
     total_worker_num: usize,
     mod_by_3: u32, mod_by_5: u32,
