@@ -1,7 +1,8 @@
 use crate::hash::{hash_at_3, hash_at_5};
 use crate::index::file::FileIndex;
 use crate::index::hash::generate_rev_table_from_file_index;
-use crate::misc::remove_duplicate;
+use crate::misc::{intersect, remove_duplicate};
+use hserde::HSerde;
 use std::collections::HashMap;
 
 pub struct Agent {
@@ -11,6 +12,9 @@ pub struct Agent {
 }
 
 const CACHE_SIZE: usize = 32;
+const NUM_OF_WORKERS: usize = 4;
+const MOD_3: u32 = 104857;
+const MOD_5: u32 = 1677721;
 
 impl Agent {
 
@@ -23,9 +27,9 @@ impl Agent {
         // Todo: make params configurable
         generate_rev_table_from_file_index(
             &file_index,
-            4,       // num of workers
-            104857,  // mod_3
-            1677721  // mod_5
+            NUM_OF_WORKERS,
+            MOD_3,
+            MOD_5
         );
 
         let db = match sled::open(file_index.db_path.clone()) {
@@ -53,9 +57,9 @@ impl Agent {
 
         let keyword_hashes_3 = if keyword.len() >= 3 {
             remove_duplicate(vec![
-                hash_at_3(keyword, 0),
-                hash_at_3(keyword, keyword.len() / 2),
-                hash_at_3(keyword, keyword.len() - 3)
+                hash_at_3(keyword, 0) % MOD_3,
+                hash_at_3(keyword, keyword.len() / 2) % MOD_3,
+                hash_at_3(keyword, keyword.len() - 3) % MOD_3
             ])
         }
 
@@ -66,9 +70,9 @@ impl Agent {
 
         let keyword_hashes_5 = if keyword.len() >= 5 {
             remove_duplicate(vec![
-                hash_at_5(keyword, 0),
-                hash_at_5(keyword, keyword.len() / 2),
-                hash_at_5(keyword, keyword.len() - 5)
+                hash_at_5(keyword, 0) % MOD_5,
+                hash_at_5(keyword, keyword.len() / 2) % MOD_5,
+                hash_at_5(keyword, keyword.len() - 5) % MOD_5
             ])
         }
 
@@ -76,8 +80,40 @@ impl Agent {
             vec![]
         };
 
-        // 방금 구한 hash들을 db에 검색해보고 거기서 나오는 chunk들을 읽어서 쭉 검색!
-        // db에 검색해서 나온 chunk들 remove_dupl하는 거 잊지말고! 같은 파일끼리 묶는 것도 잊지말고!
+        let hashes_to_see = remove_duplicate(vec![keyword_hashes_3, keyword_hashes_5].concat());
+        let mut chunks_to_see: Vec<u64> = vec![];
+
+        // for now, hash_3 and hash_5 are stored in the same DB
+        for hash in hashes_to_see.into_iter() {
+
+            match self.db.get(&hash.to_bytes()) {
+                Ok(d) => match d {
+                    Some(dd) => match Vec::<u64>::from_bytes(&dd, 0) {
+                        Ok(v) => {
+
+                            if chunks_to_see.len() == 0 {
+                                chunks_to_see = v.clone();
+                            }
+
+                            else {
+                                chunks_to_see = intersect(chunks_to_see, v);
+                            }
+
+                        },
+                        Err(_) => {
+                            // todo: alert that there's an DBIOError
+                        }
+                    },
+                    None => {}
+                },
+                Err(_) => {
+                    // todo: alert that there's an DBIOError
+                }
+            }
+
+        }
+
+        // todo: chunks를 같은 파일들끼리 묶고 각각 검색!
 
         todo!()
     }
