@@ -7,26 +7,7 @@
     - The result is returned in stream, through pipe.
       - Let's use multiprocessing module from my game engine!
   - Incremental update
-    - file 하나 추가/삭제될 때마다 index 통째로 update하기 귀찮지?
-    - 새로 추가된 파일만 반영 가능하게 고치기!
-    - 검색하면서 존재하지 않는 파일들은 무시하기
-
-- K-V DBs
-  - My own
-  - sled
-    - 99%
-  - TiKV
-  - rust-rocksdb
-
----
-
-search keywords
-
-3 letters -> hash_3
-4 letters -> hash_3[0:3], hash_3[1:4]
-5 letters -> hash_5
-6 letters -> hash_5[0:5], hash_5[1:6]
-7 letters -> hash_5[0:5], hash_5[1:6], hash_5[2:7]
+    - append/remove file incrementally
 
 ---
 
