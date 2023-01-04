@@ -12,7 +12,6 @@ pub type RevTable = HashMap<u32, Vec<u64>>;
 
 pub fn write_to_db(db: &sled::Db, rev_table: RevTable, channel: Sender<MessageToMain>) {
     // Todo: mutex when accessing DB
-    // or, does sled take care of mutex internally?
 
     for (hash, chunks) in rev_table.into_iter() {
         let hash_bytes = hash.to_bytes();
@@ -57,7 +56,8 @@ pub fn generate_rev_table_from_file_index(
     mod_by_3: u32, mod_by_5: u32,
 ) {
 
-    let mut channels = Vec::with_capacity(file_index.files.len());
+    let mut channels = Vec::with_capacity(total_worker_num);
+    let mut progress = 0;
 
     for i in 0..total_worker_num {
         let c = init_loop();
@@ -82,17 +82,18 @@ pub fn generate_rev_table_from_file_index(
             match c.rx_to_main.try_recv() {
                 Ok(m) => match m {
                     MessageToMain::Progress(p) => {
-                        // Todo: record progress
+                        progress += p;
+                        println!("progress: {} / {}", progress, file_index.files.len());
                     }
                     MessageToMain::FileNotFound(f) => {
-                        // Todo: handle error
+                        panic!("Todo: handle error")
                     }
                     MessageToMain::DBError(e) => match e {
                         DBError::DBOpenFailure => {
-                            // Todo: handle error
+                            panic!("Todo: handle error")
                         }
                         DBError::DBIOFailure => {
-                            // Todo: handle error
+                            panic!("Todo: handle error")
                         }
                     }
                 }
@@ -105,7 +106,11 @@ pub fn generate_rev_table_from_file_index(
             }
         }
 
-        channels = channels.into_iter().enumerate().filter(|(i, _)| !disconnected_channel.contains(i)).map(|(_, c)| c).collect();
+        channels = channels.into_iter().enumerate().filter(
+            |(i, _)| !disconnected_channel.contains(i)
+        ).map(
+            |(_, c)| c
+        ).collect();
     }
 
 }

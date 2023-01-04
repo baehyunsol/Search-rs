@@ -2,7 +2,7 @@ use crate::index::file::FileIndex;
 
 pub const MAX_CHUNK_COUNT: usize = 0x10_000_000;
 pub const CHUNK_SIZE: usize = 1024 + 64;
-const OVERLAP: usize = 64;
+pub const CHUNK_OVERLAP: usize = 64;
 
 impl FileIndex {
 
@@ -18,19 +18,19 @@ impl FileIndex {
 
 pub fn get_chunk_index(length: usize) -> Vec<usize> {
 
-    if length <= CHUNK_SIZE - OVERLAP {
+    if length <= CHUNK_SIZE - CHUNK_OVERLAP {
         vec![0]
     }
 
     else {
-        let mut e = length / (CHUNK_SIZE - OVERLAP);
+        let mut e = length / (CHUNK_SIZE - CHUNK_OVERLAP);
 
-        if length % (CHUNK_SIZE - OVERLAP) != 0 {
+        if length % (CHUNK_SIZE - CHUNK_OVERLAP) != 0 {
             e += 1;
         }
 
         (0..e).map(
-            |i| i * (CHUNK_SIZE - OVERLAP)
+            |i| i * (CHUNK_SIZE - CHUNK_OVERLAP)
         ).collect()
     }
 
@@ -38,13 +38,13 @@ pub fn get_chunk_index(length: usize) -> Vec<usize> {
 
 #[cfg(test)]
 mod tests {
-    use super::{CHUNK_SIZE, OVERLAP, get_chunk_index};
+    use super::{CHUNK_SIZE, CHUNK_OVERLAP, get_chunk_index};
 
     #[test]
     fn chunk_test() {
         // if I change those constants, the asserts below will alert me.
         assert_eq!(CHUNK_SIZE, 1024 + 64);
-        assert_eq!(OVERLAP, 64);
+        assert_eq!(CHUNK_OVERLAP, 64);
 
         assert_eq!(get_chunk_index(1023), vec![0]);
         assert_eq!(get_chunk_index(1024), vec![0]);

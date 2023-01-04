@@ -1,6 +1,15 @@
+use crate::agent::Agent;
+use crate::file::rmdir;
 use hserde::HSerde;
 
 const DELIMITER: u8 = '|' as u8;
+
+#[test]
+fn pn_test() {
+    let mut agent = Agent::init_new("./test_data/primes".to_string()).unwrap();
+
+    rmdir("./test_data/primes/.index");
+}
 
 // n must be an odd number!
 fn is_pn(n: u32) -> bool {

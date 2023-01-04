@@ -54,7 +54,7 @@ impl<K: Default + Clone + Eq + std::hash::Hash, V, const N: usize> LRU<K, V, N> 
 
     }
 
-    pub fn evict(&mut self) {
+    fn evict(&mut self) {
 
         loop {
             if !self.clock[self.clock_index].1 {
