@@ -1,9 +1,9 @@
-use crate::agent::Agent;
+use crate::agent::{Agent, AgentOption};
 use crate::file::{file_name, read_bytes, rmdir};
 
 #[test]
 fn ipsum_test() {
-    let mut agent = Agent::init_new("./test_data/ipsum".to_string()).unwrap();
+    let mut agent = Agent::init_new("./test_data/ipsum".to_string(), AgentOption::default()).unwrap();
 
     let test_cases = vec![
         ([8, 7, 9, 4], "ipsum"),
@@ -11,6 +11,7 @@ fn ipsum_test() {
         ([0, 2, 2, 6], "massa"),
         ([3, 0, 0, 2], "auctor"),
         ([1, 0, 2, 5], "hendrerit"),
+        ([2, 3, 4, 5], "venenatis"),
     ];
 
     for (counts, keyword) in test_cases.into_iter() {

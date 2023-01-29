@@ -4,14 +4,24 @@ use crate::hash::{hash_at_3, hash_at_5};
 use crate::threading::hash::{DBError, MessageFromMain, MessageToMain, init_loop};
 use hserde::HSerde;
 use std::collections::{HashMap, HashSet};
-use std::sync::mpsc::{TryRecvError, Sender};
+use std::sync::{Arc, Mutex, mpsc::{TryRecvError, Sender}};
 
 // (hash -> Vec<ChunkIndex>)
 // RevTable[31] = [2, 3, 4] -> Chunk 2, Chunk 3, and Chunk 4 contains hash 31.
 pub type RevTable = HashMap<u32, Vec<u64>>;
 
-pub fn write_to_db(db: &sled::Db, rev_table: RevTable, channel: Sender<MessageToMain>) {
-    // Todo: mutex when accessing DB
+pub fn write_to_db(db: &sled::Db, rev_table: RevTable, channel: Sender<MessageToMain>, mutex: Option<Arc<Mutex<()>>>) {
+
+    /*match mutex {
+        Some(m) => match m.lock() {
+            Ok(_) => {},
+            Err(_) => {
+                channel.send(MessageToMain::DBError(DBError::MutexPoisoned)).unwrap();
+                return;
+            }
+        }
+        _ => {}
+    }*/
 
     for (hash, chunks) in rev_table.into_iter() {
         let hash_bytes = hash.to_bytes();
@@ -22,14 +32,14 @@ pub fn write_to_db(db: &sled::Db, rev_table: RevTable, channel: Sender<MessageTo
                 Some(dd) => match HSerde::from_bytes(&dd, 0) {
                     Ok(v) => v,
                     Err(_) => {
-                        channel.send(MessageToMain::DBError(DBError::DBIOFailure)).unwrap();
+                        channel.send(MessageToMain::DBError(DBError::DBValuePoisoned)).unwrap();
                         vec![]
                     }
                 },
                 None => vec![]
             },
             Err(_) => {
-                channel.send(MessageToMain::DBError(DBError::DBIOFailure)).unwrap();
+                channel.send(MessageToMain::DBError(DBError::DBIOFailure("get".to_string()))).unwrap();
                 vec![]
             }
         };
@@ -42,7 +52,7 @@ pub fn write_to_db(db: &sled::Db, rev_table: RevTable, channel: Sender<MessageTo
         match db.insert(&hash_bytes, chunks_in_db.to_bytes()) {
             Ok(_) => {}
             Err(_) => {
-                channel.send(MessageToMain::DBError(DBError::DBIOFailure)).unwrap();
+                channel.send(MessageToMain::DBError(DBError::DBIOFailure("insert".to_string()))).unwrap();
             }
         }
     }
@@ -55,9 +65,20 @@ pub fn generate_rev_table_from_file_index(
     total_worker_num: usize,
     mod_by_3: u32, mod_by_5: u32,
 ) {
-
     let mut channels = Vec::with_capacity(total_worker_num);
     let mut progress = 0;
+    let mutex = if total_worker_num > 1 {
+        None
+    } else {
+        Some(Arc::new(Mutex::new(())))
+    };
+
+    let db = match sled::open(&file_index.db_path) {
+        Ok(d) => d,
+        _ => {
+            panic!("Todo: handle error")
+        }
+    };
 
     for i in 0..total_worker_num {
         let c = init_loop();
@@ -69,7 +90,8 @@ pub fn generate_rev_table_from_file_index(
             file_index: file_index.clone(),
             mod_by_3,
             mod_by_5,
-            db_path: file_index.db_path.clone()
+            db: db.clone(),
+            mutex: mutex.clone()
         }).unwrap();
 
         channels.push(c);
@@ -92,7 +114,13 @@ pub fn generate_rev_table_from_file_index(
                         DBError::DBOpenFailure => {
                             panic!("Todo: handle error")
                         }
-                        DBError::DBIOFailure => {
+                        DBError::DBValuePoisoned => {
+                            panic!("Todo: handle error")
+                        }
+                        DBError::DBIOFailure(s) => {
+                            panic!("Todo: handle error: {}", s)
+                        }
+                        DBError::MutexPoisoned => {
                             panic!("Todo: handle error")
                         }
                     }

@@ -1,6 +1,3 @@
-use crate::file::read_bytes;
-use crate::index::file::FileIndex;
-use crate::index::hash::*;
 use std::sync::mpsc;
 use std::thread;
 

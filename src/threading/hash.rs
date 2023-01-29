@@ -1,17 +1,18 @@
 use crate::file::read_bytes;
 use crate::index::file::FileIndex;
 use crate::index::hash::*;
-use std::sync::mpsc;
+use std::sync::{Arc, mpsc, Mutex};
 use std::thread;
 
 pub enum MessageFromMain {
     Run {
+        db: sled::Db,
         total_worker_num: usize,
         curr_worker_index: usize,
         file_index: FileIndex,
         mod_by_3: u32,
         mod_by_5: u32,
-        db_path: String
+        mutex: Option<Arc<Mutex<()>>>
     },
 }
 
@@ -23,7 +24,9 @@ pub enum MessageToMain {
 
 pub enum DBError {
     DBOpenFailure,
-    DBIOFailure
+    DBIOFailure(String),
+    DBValuePoisoned,
+    MutexPoisoned
 }
 
 pub struct Channel {
@@ -50,16 +53,7 @@ pub fn event_loop(tx_to_main: mpsc::Sender<MessageToMain>, rx_from_main: mpsc::R
     for msg in rx_from_main {
 
         match msg {
-            MessageFromMain::Run { total_worker_num, curr_worker_index, file_index, mod_by_3, mod_by_5, db_path } => {
-
-                let db = match sled::open(db_path) {
-                    Ok(d) => d,
-                    _ => {
-                        tx_to_main.send(MessageToMain::DBError(DBError::DBOpenFailure)).unwrap();
-                        break;
-                    }
-                };
-
+            MessageFromMain::Run { db, total_worker_num, curr_worker_index, file_index, mod_by_3, mod_by_5, mutex } => {
                 let mut rev_table_3 = RevTable::with_capacity(0x8_000);
                 let mut rev_table_5 = RevTable::with_capacity(0x8_000);
 
@@ -86,12 +80,12 @@ pub fn event_loop(tx_to_main: mpsc::Sender<MessageToMain>, rx_from_main: mpsc::R
                     }
 
                     if rev_table_3.len() > 0x8_000 {
-                        write_to_db(&db, rev_table_3, tx_to_main.clone());
+                        write_to_db(&db, rev_table_3, tx_to_main.clone(), mutex.clone());
                         rev_table_3 = RevTable::with_capacity(0x8_000);
                     }
 
                     if rev_table_5.len() > 0x8_000 {
-                        write_to_db(&db, rev_table_5, tx_to_main.clone());
+                        write_to_db(&db, rev_table_5, tx_to_main.clone(), mutex.clone());
                         rev_table_5 = RevTable::with_capacity(0x8_000);
                     }
 
@@ -106,11 +100,11 @@ pub fn event_loop(tx_to_main: mpsc::Sender<MessageToMain>, rx_from_main: mpsc::R
                 }
 
                 if rev_table_3.len() > 0 {
-                    write_to_db(&db, rev_table_3, tx_to_main.clone());
+                    write_to_db(&db, rev_table_3, tx_to_main.clone(), mutex.clone());
                 }
 
                 if rev_table_5.len() > 0 {
-                    write_to_db(&db, rev_table_5, tx_to_main.clone());
+                    write_to_db(&db, rev_table_5, tx_to_main.clone(), mutex.clone());
                 }
 
                 if counter > 0 {

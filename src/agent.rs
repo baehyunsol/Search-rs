@@ -11,29 +11,84 @@ use std::collections::{HashMap, HashSet};
 pub struct Agent {
     file_index: FileIndex,
     file_cache: LRU<String, Vec<u8>, 32>,
+    mod_3: u32,
+    mod_5: u32,
     db: sled::Db
 }
 
-// TODO FIXME
-// for now, it cannot spawn multiple agents because sled doesn't let multiple readers to access a DB
-const NUM_OF_WORKERS: usize = 1;
-const MOD_3: u32 = 104857;
-const MOD_5: u32 = 1677721;
+#[derive(Copy, Clone)]
+pub struct AgentOption {
+    multicore: MultiCore,
+    mod_3: u32,
+    mod_5: u32,
+}
+
+#[derive(Copy, Clone)]
+pub enum MultiCore {
+    Auto(usize),
+    Force(usize)
+}
+
+impl AgentOption {
+
+    pub fn small() -> Self {
+        AgentOption {
+            mod_3: 13107,
+            mod_5: 104857,
+            multicore: MultiCore::Force(1)
+        }
+    }
+
+    pub fn medium() -> Self {
+        AgentOption {
+            mod_3: 104857,
+            mod_5: 1677721,
+            multicore: MultiCore::Auto(4)
+        }
+    }
+
+    pub fn big() -> Self {
+        AgentOption {
+            mod_3: 1677721,
+            mod_5: 26843545,
+            multicore: MultiCore::Auto(8)
+        }
+    }
+
+}
+
+impl std::default::Default for AgentOption {
+
+    fn default() -> Self {
+        Self::medium()
+    }
+
+}
+
+const MULTICORE_THRESHOLD: usize = 24;
 
 impl Agent {
 
     // if file_index already exists, it's overwritten
     // todo: use explicit error type
-    pub fn init_new(path: String) -> Result<Self, ()> {
+    pub fn init_new(path: String, option: AgentOption) -> Result<Self, ()> {
         let file_index = FileIndex::init_dir(path)?;
         let file_cache = LRU::new();
 
-        // Todo: make params configurable
+        let num_of_workers = match option.multicore {
+            MultiCore::Auto(n) => if file_index.files.len() > MULTICORE_THRESHOLD {
+                n
+            } else {
+                1
+            },
+            MultiCore::Force(n) => n
+        };
+
         generate_rev_table_from_file_index(
             &file_index,
-            NUM_OF_WORKERS,
-            MOD_3,
-            MOD_5
+            num_of_workers,
+            option.mod_3,
+            option.mod_5
         );
 
         let db = match sled::open(file_index.db_path.clone()) {
@@ -41,7 +96,12 @@ impl Agent {
             _ => { return Err(()); }
         };
 
-        Ok(Agent { file_index, file_cache, db })
+        match db.insert("__metadata", vec![option.mod_3, option.mod_5].to_bytes()) {
+            Err(_) => { return Err(()); }
+            _ => {}
+        }
+
+        Ok(Agent { file_index, file_cache, db, mod_3: option.mod_3, mod_5: option.mod_5 })
     }
 
     // returns Err if no file_index exists at the given path
@@ -54,7 +114,18 @@ impl Agent {
             _ => { return Err(()); }
         };
 
-        Ok(Agent { file_index, file_cache, db })
+        let metadata: Vec<u32> = match db.get("__metadata") {
+            Ok(d) => match d {
+                Some(dd) => match HSerde::from_bytes(&dd, 0) {
+                    Ok(v) => v,
+                    _ => { return Err(()); }
+                },
+                _ => { return Err(()); }
+            }
+            _ => { return Err(()); }
+        };
+
+        Ok(Agent { file_index, file_cache, db, mod_3: metadata[0], mod_5: metadata[1] })
     }
 
     // it's `&mut self` because it might mutate its cache
@@ -62,9 +133,9 @@ impl Agent {
 
         let keyword_hashes_3 = if keyword.len() >= 3 {
             remove_duplicate(vec![
-                hash_at_3(keyword, 0) % MOD_3,
-                hash_at_3(keyword, (keyword.len() / 2).min(keyword.len() - 3)) % MOD_3,
-                hash_at_3(keyword, keyword.len() - 3) % MOD_3
+                hash_at_3(keyword, 0) % self.mod_3,
+                hash_at_3(keyword, (keyword.len() / 2).min(keyword.len() - 3)) % self.mod_3,
+                hash_at_3(keyword, keyword.len() - 3) % self.mod_3
             ])
         }
 
@@ -75,9 +146,9 @@ impl Agent {
 
         let keyword_hashes_5 = if keyword.len() >= 5 {
             remove_duplicate(vec![
-                hash_at_5(keyword, 0) % MOD_5,
-                hash_at_5(keyword, (keyword.len() / 2).min(keyword.len() - 5)) % MOD_5,
-                hash_at_5(keyword, keyword.len() - 5) % MOD_5
+                hash_at_5(keyword, 0) % self.mod_5,
+                hash_at_5(keyword, (keyword.len() / 2).min(keyword.len() - 5)) % self.mod_5,
+                hash_at_5(keyword, keyword.len() - 5) % self.mod_5
             ])
         }
 
