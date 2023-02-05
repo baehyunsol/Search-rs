@@ -15,13 +15,13 @@ fn ipsum_test() {
     ];
 
     for (counts, keyword) in test_cases.into_iter() {
-        unit_test(&mut agent, counts, keyword);
+        test_unit(&mut agent, counts, keyword);
     }
 
     rmdir("./test_data/ipsum/.index");
 }
 
-fn unit_test(agent: &mut Agent, counts: [usize; 4], keyword: &str) {
+fn test_unit(agent: &mut Agent, counts: [usize; 4], keyword: &str) {
 
     let mut file_counts = [0; 4];
     let search_result = agent.search(keyword.as_bytes());
@@ -46,7 +46,7 @@ fn unit_test(agent: &mut Agent, counts: [usize; 4], keyword: &str) {
         }
 
         else {
-            panic!();
+            panic!("{}", file_name);
         }
 
         let actual_data = read_bytes(&file_path).unwrap();

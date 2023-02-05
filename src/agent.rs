@@ -128,6 +128,16 @@ impl Agent {
         Ok(Agent { file_index, file_cache, db, mod_3: metadata[0], mod_5: metadata[1] })
     }
 
+    pub fn dummy() -> Self {
+        Agent {
+            file_index: FileIndex::empty(),
+            file_cache: LRU::new(),
+            mod_3: 3,
+            mod_5: 5,
+            db: sled::open("tmp").unwrap()
+        }
+    }
+
     // it's `&mut self` because it might mutate its cache
     pub fn search(&mut self, keyword: &[u8]) -> Vec<(String, usize)> {  // Vec<(FileName, index)>
 

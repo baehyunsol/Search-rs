@@ -101,6 +101,7 @@ mod tests {
         file_index_test("fast_collatz", 1);
         file_index_test("primes", 256);
         file_index_test("ipsum", 4);
+        file_index_test("kzg", 10);
     }
 
     fn file_index_test(dir: &str, len: usize) {

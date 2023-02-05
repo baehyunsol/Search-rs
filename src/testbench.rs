@@ -1,5 +1,6 @@
 mod collatz;
 mod ipsum;
+mod kzg;
 mod pn;
 
 pub fn test_cases() -> Vec<(Vec<u8>, Vec<Vec<u8>>, Vec<Vec<usize>>)> {
